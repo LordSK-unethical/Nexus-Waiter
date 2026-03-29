@@ -1,10 +1,10 @@
 {
     "logs": [
         {
-            "outputFile": "com.example.nexuswaiter.app-mergeDebugResources-42:/values-v21/values-v21.xml",
+            "outputFile": "com.nexus.restaurant.app-mergeDebugResources-60:/values-v21/values-v21.xml",
             "map": [
                 {
-                    "source": "C:\\Users\\Soham\\.gradle\\caches\\8.9\\transforms\\75ea9556da06a2ddba1460016a6e4412\\transformed\\core-1.13.1\\res\\values-v21\\values-v21.xml",
+                    "source": "C:\\Users\\Soham\\.gradle\\caches\\8.9\\transforms\\da77af7c4d036c95675a2b3fcb5dd6b5\\transformed\\core-1.12.0\\res\\values-v21\\values-v21.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,9,10,13",
                         "startColumns": "4,4,4,4,4,4,4,4,4,4",

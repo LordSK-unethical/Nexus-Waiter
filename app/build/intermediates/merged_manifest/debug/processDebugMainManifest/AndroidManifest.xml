@@ -1,33 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.nexuswaiter"
+    package="com.nexus.restaurant"
     android:versionCode="1"
     android:versionName="1.0" >
 
     <uses-sdk
         android:minSdkVersion="24"
-        android:targetSdkVersion="35" />
+        android:targetSdkVersion="34" />
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <permission
-        android:name="com.example.nexuswaiter.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        android:name="com.nexus.restaurant.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
         android:protectionLevel="signature" />
 
-    <uses-permission android:name="com.example.nexuswaiter.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+    <uses-permission android:name="com.nexus.restaurant.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
 
     <application
+        android:name="com.nexus.restaurant.NexusRestaurantApp"
         android:allowBackup="true"
         android:appComponentFactory="androidx.core.app.CoreComponentFactory"
         android:debuggable="true"
         android:extractNativeLibs="false"
         android:icon="@drawable/ic_launcher_foreground"
-        android:label="Nexus Waiter"
+        android:label="Nexus Restaurant"
         android:roundIcon="@drawable/ic_launcher_foreground"
         android:supportsRtl="true"
-        android:theme="@style/Theme.NexusWaiter" >
+        android:theme="@style/Theme.NexusRestaurant"
+        android:usesCleartextTraffic="true" >
         <activity
-            android:name="com.example.nexuswaiter.MainActivity"
+            android:name="com.nexus.restaurant.presentation.MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.NexusWaiter" >
+            android:theme="@style/Theme.NexusRestaurant" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -43,7 +49,7 @@
 
         <provider
             android:name="androidx.startup.InitializationProvider"
-            android:authorities="com.example.nexuswaiter.androidx-startup"
+            android:authorities="com.nexus.restaurant.androidx-startup"
             android:exported="false" >
             <meta-data
                 android:name="androidx.emoji2.text.EmojiCompatInitializer"
@@ -55,6 +61,11 @@
                 android:name="androidx.profileinstaller.ProfileInstallerInitializer"
                 android:value="androidx.startup" />
         </provider>
+
+        <service
+            android:name="androidx.room.MultiInstanceInvalidationService"
+            android:directBootAware="true"
+            android:exported="false" />
 
         <receiver
             android:name="androidx.profileinstaller.ProfileInstallReceiver"

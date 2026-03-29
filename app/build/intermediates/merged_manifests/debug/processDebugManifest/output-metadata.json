@@ -4,7 +4,7 @@
     "type": "MERGED_MANIFESTS",
     "kind": "Directory"
   },
-  "applicationId": "com.example.nexuswaiter",
+  "applicationId": "com.nexus.restaurant",
   "variantName": "debug",
   "elements": [
     {

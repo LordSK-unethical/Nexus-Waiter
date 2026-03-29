@@ -4,7 +4,7 @@
     "type": "COMPATIBLE_SCREEN_MANIFEST",
     "kind": "Directory"
   },
-  "applicationId": "com.example.nexuswaiter",
+  "applicationId": "com.nexus.restaurant",
   "variantName": "debug",
   "elements": []
 }

@@ -1,6 +1,14 @@
 [
     {
-        "merged": "com.example.nexuswaiter.app-debug-44:/drawable_ic_launcher_foreground.xml.flat",
-        "source": "com.example.nexuswaiter.app-main-46:/drawable/ic_launcher_foreground.xml"
+        "merged": "com.nexus.restaurant.app-debug-62:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "com.nexus.restaurant.app-main-64:/mipmap-anydpi-v26/ic_launcher_round.xml"
+    },
+    {
+        "merged": "com.nexus.restaurant.app-debug-62:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.nexus.restaurant.app-main-64:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "C:\\Users\\Soham\\.gradle\\daemon\\8.9\\com.nexus.restaurant.app-debug-62:\\drawable_ic_launcher_foreground.xml.flat",
+        "source": "C:\\Users\\Soham\\.gradle\\daemon\\8.9\\com.nexus.restaurant.app-main-64:\\drawable\\ic_launcher_foreground.xml"
     }
 ]

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<configuration name="app" type="AndroidRunConfigurationType" factoryName="Android App">
+  <module name="app" />
+  <option name="DEPLOY" value="true" />
+  <option name="DEPLOY_TARGET" value="app" />
+  <option name="APK_FILE" value="$PROJECT_DIR$/app/build/outputs/apk/debug/app-debug.apk" />
+  <option name="DEBUGGER_TYPE" value="Hybrid" />
+  <NativeDebugSettings />
+  <Profilers>
+    <option name="cpuUsageEnabled" value="false" />
+    <option name="memoryUsageEnabled" value="false" />
+  </Profilers>
+</configuration>
