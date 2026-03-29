@@ -136,8 +136,8 @@ class SocketManager @Inject constructor() {
                 scope.launch {
                     try {
                         val data = args.firstOrNull() as? JSONObject
-                        val tablesJson = data?.getJSONArray("tables")
-                        val ordersJson = data?.getJSONArray("orders")
+                        val tablesJson = data?.optJSONArray("tables")
+                        val ordersJson = data?.optJSONArray("orders")
 
                         val tables = mutableListOf<Table>()
                         val orders = mutableListOf<Order>()
@@ -179,30 +179,30 @@ class SocketManager @Inject constructor() {
 
     private fun parseOrderEvent(json: JSONObject): Order? {
         return try {
-            val itemsArray = json.getJSONArray("items")
+            val itemsArray = json.optJSONArray("items") ?: JSONArray()
             val items = mutableListOf<OrderItem>()
 
             for (i in 0 until itemsArray.length()) {
                 val itemJson = itemsArray.getJSONObject(i)
                 items.add(
                     OrderItem(
-                        itemId = itemJson.getString("itemId"),
-                        name = itemJson.getString("name"),
-                        price = itemJson.getDouble("price"),
-                        quantity = itemJson.getInt("quantity"),
+                        itemId = itemJson.optString("itemId") ?: "",
+                        name = itemJson.optString("name") ?: "",
+                        price = itemJson.optDouble("price") ?: 0.0,
+                        quantity = itemJson.optInt("quantity") ?: 0,
                         notes = itemJson.optString("notes", "")
                     )
                 )
             }
 
             Order(
-                orderId = json.getString("orderId"),
-                tableNo = json.getString("tableNo"),
-                people = json.getInt("people"),
+                orderId = json.optString("orderId") ?: return null,
+                tableNo = json.optString("tableNo") ?: return null,
+                people = json.optInt("people") ?: return null,
                 items = items,
-                status = OrderStatus.valueOf(json.getString("status")),
+                status = OrderStatus.valueOf(json.optString("status") ?: return null),
                 notes = json.optString("notes", ""),
-                timestamp = json.getLong("timestamp"),
+                timestamp = json.optLong("timestamp") ?: System.currentTimeMillis(),
                 totalAmount = json.optDouble("totalAmount", 0.0)
             )
         } catch (e: Exception) {
@@ -213,9 +213,9 @@ class SocketManager @Inject constructor() {
     private fun parseTableEvent(json: JSONObject): Table? {
         return try {
             Table(
-                tableNo = json.getString("tableNo"),
-                status = TableStatus.valueOf(json.getString("status")),
-                capacity = json.getInt("capacity"),
+                tableNo = json.optString("tableNo") ?: return null,
+                status = TableStatus.valueOf(json.optString("status") ?: return null),
+                capacity = json.optInt("capacity") ?: 0,
                 currentOrder = null,
                 reservationName = json.optString("reservationName", null),
                 reservationTime = json.optLong("reservationTime", 0).takeIf { it > 0 },

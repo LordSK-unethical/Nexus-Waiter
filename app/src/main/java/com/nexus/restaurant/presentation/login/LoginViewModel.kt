@@ -2,6 +2,7 @@ package com.nexus.restaurant.presentation.login
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nexus.restaurant.NetworkConfig
 import com.nexus.restaurant.domain.model.SocketEvent
 import com.nexus.restaurant.domain.model.UserRole
 import com.nexus.restaurant.domain.repository.SocketRepository
@@ -40,7 +41,6 @@ class LoginViewModel @Inject constructor(
             socketRepository.isConnected.collect { connected ->
                 _isConnected.value = connected
                 if (connected && _loginState.value == LoginResult.Loading) {
-                    // Connection successful, now try to login
                     tryLogin()
                 }
             }
@@ -78,15 +78,11 @@ class LoginViewModel @Inject constructor(
 
         _loginState.value = LoginResult.Loading
 
-        // Connect to server
-        socketRepository.connect("http://192.168.1.8:3000")
+        socketRepository.connect(NetworkConfig.BASE_URL)
         
-        // Register after connection
         viewModelScope.launch {
-            // Wait for connection or timeout
             kotlinx.coroutines.delay(3000)
             if (_loginState.value == LoginResult.Loading) {
-                // If still loading after timeout, try with current connection state
                 tryLogin()
             }
         }
@@ -98,11 +94,9 @@ class LoginViewModel @Inject constructor(
         
         socketRepository.registerUser(role, username)
         
-        // Give time for server response
         viewModelScope.launch {
             kotlinx.coroutines.delay(2000)
             if (_loginState.value == LoginResult.Loading) {
-                // If no response, assume success if connected
                 if (_isConnected.value) {
                     _loginState.value = LoginResult.Success
                 } else {

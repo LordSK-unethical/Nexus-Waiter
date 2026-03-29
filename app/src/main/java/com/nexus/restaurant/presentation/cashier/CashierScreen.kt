@@ -19,21 +19,28 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Receipt
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -50,7 +57,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.nexus.restaurant.domain.model.Order
 import com.nexus.restaurant.domain.model.OrderStatus
+import com.nexus.restaurant.presentation.common.EmptyState
 import com.nexus.restaurant.presentation.common.GradientBackground
+import com.nexus.restaurant.presentation.common.LoadingIndicator
 import com.nexus.restaurant.presentation.common.StatusIndicator
 import com.nexus.restaurant.presentation.theme.GlassCardColor
 import com.nexus.restaurant.presentation.theme.OccupiedOrange
@@ -59,14 +68,19 @@ import com.nexus.restaurant.presentation.theme.PrimaryDark
 import com.nexus.restaurant.presentation.theme.ReadyColor
 import com.nexus.restaurant.presentation.theme.ReservedRed
 import com.nexus.restaurant.presentation.theme.ServedColor
+import kotlinx.coroutines.launch
+import java.text.NumberFormat
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CashierScreen(
-    viewModel: CashierViewModel = hiltViewModel()
+    viewModel: CashierViewModel = hiltViewModel(),
+    onLogout: () -> Unit = {}
 ) {
     val orders by viewModel.orders.collectAsState()
     val isConnected by viewModel.isConnected.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("Active", "Completed", "All")
@@ -75,8 +89,27 @@ fun CashierScreen(
     val completedOrders = orders.filter { it.status == OrderStatus.SERVED }
     val allOrders = orders
 
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is CashierEvent.ShowError -> {
+                    snackbarHostState.showSnackbar(event.message)
+                }
+                is CashierEvent.Logout -> {
+                    onLogout()
+                }
+            }
+        }
+    }
+
+    val activeTotal = activeOrders.sumOf { it.totalAmount }
+    val completedTotal = completedOrders.sumOf { it.totalAmount }
+
     GradientBackground {
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
                     title = {
@@ -94,9 +127,24 @@ fun CashierScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { viewModel.refresh() }) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Refresh",
+                                tint = Primary
+                            )
+                        }
+                        IconButton(onClick = { viewModel.logout() }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Logout,
+                                contentDescription = "Logout",
+                                tint = ReservedRed
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(end = 16.dp)
+                            modifier = Modifier.padding(end = 8.dp)
                         ) {
                             StatusIndicator(isConnected = isConnected)
                             Spacer(modifier = Modifier.width(8.dp))
@@ -114,54 +162,67 @@ fun CashierScreen(
             },
             containerColor = Color.Transparent
         ) { paddingValues ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            ) {
-                // Summary Cards
-                SummarySection(
-                    activeTotal = activeOrders.sumOf { it.totalAmount },
-                    completedToday = completedOrders.size,
-                    completedTotal = completedOrders.sumOf { it.totalAmount }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Tabs
-                TabRow(
-                    selectedTabIndex = selectedTab,
-                    containerColor = Color.Transparent,
-                    contentColor = Primary
+            if (isLoading && orders.isEmpty()) {
+                LoadingIndicator()
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
                 ) {
-                    tabs.forEachIndexed { index, title ->
-                        Tab(
-                            selected = selectedTab == index,
-                            onClick = { selectedTab = index },
-                            text = {
-                                Text(
-                                    text = title,
-                                    fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // Summary Cards
+                        SummarySection(
+                            activeTotal = activeTotal,
+                            completedToday = completedOrders.size,
+                            completedTotal = completedTotal
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Tabs
+                        TabRow(
+                            selectedTabIndex = selectedTab,
+                            containerColor = Color.Transparent,
+                            contentColor = Primary
+                        ) {
+                            tabs.forEachIndexed { index, title ->
+                                Tab(
+                                    selected = selectedTab == index,
+                                    onClick = { selectedTab = index },
+                                    text = {
+                                        Text(
+                                            text = title,
+                                            fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    }
                                 )
                             }
-                        )
-                    }
-                }
+                        }
 
-                // Orders List
-                val displayOrders = when (selectedTab) {
-                    0 -> activeOrders
-                    1 -> completedOrders
-                    else -> allOrders
-                }
+                        // Orders List
+                        val displayOrders = when (selectedTab) {
+                            0 -> activeOrders
+                            1 -> completedOrders
+                            else -> allOrders
+                        }
 
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(displayOrders) { order ->
-                        BillCard(order = order)
+                        if (displayOrders.isEmpty()) {
+                            EmptyState(
+                                message = "No orders",
+                                modifier = Modifier.weight(1f)
+                            )
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(displayOrders) { order ->
+                                    BillCard(order = order)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -183,7 +244,7 @@ private fun SummarySection(
     ) {
         SummaryCard(
             title = "Active",
-            value = "$${String.format("%.2f", activeTotal)}",
+            value = formatCurrency(activeTotal),
             icon = Icons.Default.Schedule,
             color = OccupiedOrange,
             modifier = Modifier.weight(1f)
@@ -197,7 +258,7 @@ private fun SummarySection(
         )
         SummaryCard(
             title = "Revenue",
-            value = "$${String.format("%.2f", completedTotal)}",
+            value = formatCurrency(completedTotal),
             icon = Icons.Default.AttachMoney,
             color = Primary,
             modifier = Modifier.weight(1f)
@@ -315,10 +376,9 @@ private fun BillCard(order: Order) {
                     }
                 }
 
-                // Total Amount
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = "$${String.format("%.2f", order.totalAmount)}",
+                        text = formatCurrency(order.totalAmount),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = Primary
@@ -334,7 +394,6 @@ private fun BillCard(order: Order) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Items Summary
             Text(
                 text = "${order.items.size} items • ${order.people} guests",
                 style = MaterialTheme.typography.bodyMedium,
@@ -343,7 +402,6 @@ private fun BillCard(order: Order) {
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Items List
             order.items.take(3).forEach { item ->
                 Row(
                     modifier = Modifier
@@ -357,7 +415,7 @@ private fun BillCard(order: Order) {
                         color = Color.Gray
                     )
                     Text(
-                        text = "$${String.format("%.2f", item.price * item.quantity)}",
+                        text = formatCurrency(item.price * item.quantity),
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.Gray
                     )
@@ -374,4 +432,8 @@ private fun BillCard(order: Order) {
             }
         }
     }
+}
+
+private fun formatCurrency(amount: Double): String {
+    return NumberFormat.getCurrencyInstance(Locale.US).format(amount)
 }

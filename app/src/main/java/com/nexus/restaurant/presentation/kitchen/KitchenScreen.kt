@@ -1,16 +1,13 @@
 package com.nexus.restaurant.presentation.kitchen
 
-import androidx.compose.animation.AnimatedVisibility
+import android.media.MediaPlayer
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,14 +28,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -46,14 +48,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -61,7 +60,10 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.nexus.restaurant.domain.model.Order
 import com.nexus.restaurant.domain.model.OrderStatus
+import com.nexus.restaurant.presentation.common.EmptyState
+import com.nexus.restaurant.presentation.common.GlassSurfaceCard
 import com.nexus.restaurant.presentation.common.GradientBackground
+import com.nexus.restaurant.presentation.common.LoadingIndicator
 import com.nexus.restaurant.presentation.common.StatusIndicator
 import com.nexus.restaurant.presentation.theme.GlassCardColor
 import com.nexus.restaurant.presentation.theme.OccupiedOrange
@@ -69,21 +71,48 @@ import com.nexus.restaurant.presentation.theme.PreparingColor
 import com.nexus.restaurant.presentation.theme.Primary
 import com.nexus.restaurant.presentation.theme.ReadyColor
 import com.nexus.restaurant.presentation.theme.ReservedRed
+import kotlinx.coroutines.launch
+import java.text.NumberFormat
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KitchenScreen(
-    viewModel: KitchenViewModel = hiltViewModel()
+    viewModel: KitchenViewModel = hiltViewModel(),
+    onLogout: () -> Unit = {}
 ) {
     val orders by viewModel.orders.collectAsState()
     val isConnected by viewModel.isConnected.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
 
     val pendingOrders = orders.filter { it.status == OrderStatus.PENDING }
     val preparingOrders = orders.filter { it.status == OrderStatus.PREPARING }
     val readyOrders = orders.filter { it.status == OrderStatus.READY }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is KitchenEvent.ShowError -> {
+                    snackbarHostState.showSnackbar(event.message)
+                }
+                is KitchenEvent.ShowSuccess -> {
+                    snackbarHostState.showSnackbar(event.message)
+                }
+                is KitchenEvent.NewOrderArrived -> {
+                    snackbarHostState.showSnackbar("New order received!")
+                }
+                is KitchenEvent.Logout -> {
+                    onLogout()
+                }
+            }
+        }
+    }
+
     GradientBackground {
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
                     title = {
@@ -101,9 +130,24 @@ fun KitchenScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { viewModel.refresh() }) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Refresh",
+                                tint = Primary
+                            )
+                        }
+                        IconButton(onClick = { viewModel.logout() }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Logout,
+                                contentDescription = "Logout",
+                                tint = ReservedRed
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(end = 16.dp)
+                            modifier = Modifier.padding(end = 8.dp)
                         ) {
                             StatusIndicator(isConnected = isConnected)
                             Spacer(modifier = Modifier.width(8.dp))
@@ -121,51 +165,60 @@ fun KitchenScreen(
             },
             containerColor = Color.Transparent
         ) { paddingValues ->
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Pending Section
-                item {
-                    OrderSection(
-                        title = "New Orders",
-                        count = pendingOrders.size,
-                        color = ReservedRed,
-                        orders = pendingOrders,
-                        onUpdateStatus = { order, newStatus ->
-                            viewModel.updateOrderStatus(order, newStatus)
-                        }
-                    )
-                }
+            if (isLoading && orders.isEmpty()) {
+                LoadingIndicator()
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                ) {
+                    if (orders.isEmpty()) {
+                        EmptyState(message = "No orders yet")
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            item {
+                                OrderSection(
+                                    title = "New Orders",
+                                    count = pendingOrders.size,
+                                    color = ReservedRed,
+                                    orders = pendingOrders,
+                                    onUpdateStatus = { order, newStatus ->
+                                        viewModel.updateOrderStatus(order, newStatus)
+                                    }
+                                )
+                            }
 
-                // Preparing Section
-                item {
-                    OrderSection(
-                        title = "Preparing",
-                        count = preparingOrders.size,
-                        color = PreparingColor,
-                        orders = preparingOrders,
-                        onUpdateStatus = { order, newStatus ->
-                            viewModel.updateOrderStatus(order, newStatus)
-                        }
-                    )
-                }
+                            item {
+                                OrderSection(
+                                    title = "Preparing",
+                                    count = preparingOrders.size,
+                                    color = PreparingColor,
+                                    orders = preparingOrders,
+                                    onUpdateStatus = { order, newStatus ->
+                                        viewModel.updateOrderStatus(order, newStatus)
+                                    }
+                                )
+                            }
 
-                // Ready Section
-                item {
-                    OrderSection(
-                        title = "Ready to Serve",
-                        count = readyOrders.size,
-                        color = ReadyColor,
-                        orders = readyOrders,
-                        showGlow = true,
-                        onUpdateStatus = { order, newStatus ->
-                            viewModel.updateOrderStatus(order, newStatus)
+                            item {
+                                OrderSection(
+                                    title = "Ready to Serve",
+                                    count = readyOrders.size,
+                                    color = ReadyColor,
+                                    orders = readyOrders,
+                                    showGlow = true,
+                                    onUpdateStatus = { order, newStatus ->
+                                        viewModel.updateOrderStatus(order, newStatus)
+                                    }
+                                )
+                            }
                         }
-                    )
+                    }
                 }
             }
         }
@@ -335,13 +388,11 @@ private fun KitchenOrderCard(
                     }
                 }
 
-                // Status Badge
                 StatusBadge(status = order.status, color = statusColor)
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Items
             order.items.forEach { item ->
                 Row(
                     modifier = Modifier
@@ -375,7 +426,6 @@ private fun KitchenOrderCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Progress Bar
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier
@@ -388,7 +438,6 @@ private fun KitchenOrderCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Action Buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)

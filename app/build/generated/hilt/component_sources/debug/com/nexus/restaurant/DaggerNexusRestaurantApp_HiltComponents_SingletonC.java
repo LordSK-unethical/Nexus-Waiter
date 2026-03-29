@@ -6,14 +6,17 @@ import android.view.View;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.SavedStateHandle;
 import androidx.lifecycle.ViewModel;
+import com.nexus.restaurant.data.local.MenuItemDao;
 import com.nexus.restaurant.data.local.NexusDatabase;
 import com.nexus.restaurant.data.local.OrderDao;
 import com.nexus.restaurant.data.local.TableDao;
+import com.nexus.restaurant.data.repository.MenuRepositoryImpl;
 import com.nexus.restaurant.data.repository.OrderRepositoryImpl;
 import com.nexus.restaurant.data.repository.SocketRepositoryImpl;
 import com.nexus.restaurant.data.repository.TableRepositoryImpl;
 import com.nexus.restaurant.data.socket.SocketManager;
 import com.nexus.restaurant.di.DatabaseModule_ProvideDatabaseFactory;
+import com.nexus.restaurant.di.DatabaseModule_ProvideMenuItemDaoFactory;
 import com.nexus.restaurant.di.DatabaseModule_ProvideOrderDaoFactory;
 import com.nexus.restaurant.di.DatabaseModule_ProvideTableDaoFactory;
 import com.nexus.restaurant.presentation.MainActivity;
@@ -475,23 +478,23 @@ public final class DaggerNexusRestaurantApp_HiltComponents_SingletonC {
     private static final class LazyClassKeyProvider {
       static String com_nexus_restaurant_presentation_waiter_WaiterViewModel = "com.nexus.restaurant.presentation.waiter.WaiterViewModel";
 
-      static String com_nexus_restaurant_presentation_kitchen_KitchenViewModel = "com.nexus.restaurant.presentation.kitchen.KitchenViewModel";
-
       static String com_nexus_restaurant_presentation_login_LoginViewModel = "com.nexus.restaurant.presentation.login.LoginViewModel";
 
       static String com_nexus_restaurant_presentation_cashier_CashierViewModel = "com.nexus.restaurant.presentation.cashier.CashierViewModel";
 
-      @KeepFieldType
-      WaiterViewModel com_nexus_restaurant_presentation_waiter_WaiterViewModel2;
+      static String com_nexus_restaurant_presentation_kitchen_KitchenViewModel = "com.nexus.restaurant.presentation.kitchen.KitchenViewModel";
 
       @KeepFieldType
-      KitchenViewModel com_nexus_restaurant_presentation_kitchen_KitchenViewModel2;
+      WaiterViewModel com_nexus_restaurant_presentation_waiter_WaiterViewModel2;
 
       @KeepFieldType
       LoginViewModel com_nexus_restaurant_presentation_login_LoginViewModel2;
 
       @KeepFieldType
       CashierViewModel com_nexus_restaurant_presentation_cashier_CashierViewModel2;
+
+      @KeepFieldType
+      KitchenViewModel com_nexus_restaurant_presentation_kitchen_KitchenViewModel2;
     }
 
     private static final class SwitchingProvider<T> implements Provider<T> {
@@ -525,7 +528,7 @@ public final class DaggerNexusRestaurantApp_HiltComponents_SingletonC {
           return (T) new LoginViewModel(singletonCImpl.socketRepositoryImplProvider.get());
 
           case 3: // com.nexus.restaurant.presentation.waiter.WaiterViewModel 
-          return (T) new WaiterViewModel(singletonCImpl.tableRepositoryImplProvider.get(), singletonCImpl.orderRepositoryImplProvider.get(), singletonCImpl.socketRepositoryImplProvider.get());
+          return (T) new WaiterViewModel(singletonCImpl.tableRepositoryImplProvider.get(), singletonCImpl.orderRepositoryImplProvider.get(), singletonCImpl.socketRepositoryImplProvider.get(), singletonCImpl.menuRepositoryImplProvider.get());
 
           default: throw new AssertionError(id);
         }
@@ -621,6 +624,10 @@ public final class DaggerNexusRestaurantApp_HiltComponents_SingletonC {
 
     private Provider<TableRepositoryImpl> tableRepositoryImplProvider;
 
+    private Provider<MenuItemDao> provideMenuItemDaoProvider;
+
+    private Provider<MenuRepositoryImpl> menuRepositoryImplProvider;
+
     private SingletonCImpl(ApplicationContextModule applicationContextModuleParam) {
       this.applicationContextModule = applicationContextModuleParam;
       initialize(applicationContextModuleParam);
@@ -636,6 +643,8 @@ public final class DaggerNexusRestaurantApp_HiltComponents_SingletonC {
       this.socketRepositoryImplProvider = DoubleCheck.provider(new SwitchingProvider<SocketRepositoryImpl>(singletonCImpl, 4));
       this.provideTableDaoProvider = DoubleCheck.provider(new SwitchingProvider<TableDao>(singletonCImpl, 6));
       this.tableRepositoryImplProvider = DoubleCheck.provider(new SwitchingProvider<TableRepositoryImpl>(singletonCImpl, 5));
+      this.provideMenuItemDaoProvider = DoubleCheck.provider(new SwitchingProvider<MenuItemDao>(singletonCImpl, 8));
+      this.menuRepositoryImplProvider = DoubleCheck.provider(new SwitchingProvider<MenuRepositoryImpl>(singletonCImpl, 7));
     }
 
     @Override
@@ -691,6 +700,12 @@ public final class DaggerNexusRestaurantApp_HiltComponents_SingletonC {
 
           case 6: // com.nexus.restaurant.data.local.TableDao 
           return (T) DatabaseModule_ProvideTableDaoFactory.provideTableDao(singletonCImpl.provideDatabaseProvider.get());
+
+          case 7: // com.nexus.restaurant.data.repository.MenuRepositoryImpl 
+          return (T) new MenuRepositoryImpl(singletonCImpl.provideMenuItemDaoProvider.get());
+
+          case 8: // com.nexus.restaurant.data.local.MenuItemDao 
+          return (T) DatabaseModule_ProvideMenuItemDaoFactory.provideMenuItemDao(singletonCImpl.provideDatabaseProvider.get());
 
           default: throw new AssertionError(id);
         }

@@ -2,17 +2,25 @@ package com.nexus.restaurant.presentation.cashier
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nexus.restaurant.NetworkConfig
 import com.nexus.restaurant.domain.model.Order
-import com.nexus.restaurant.domain.model.OrderItem
-import com.nexus.restaurant.domain.model.OrderStatus
+import com.nexus.restaurant.domain.model.SocketEvent
 import com.nexus.restaurant.domain.repository.OrderRepository
 import com.nexus.restaurant.domain.repository.SocketRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+sealed class CashierEvent {
+    data class ShowError(val message: String) : CashierEvent()
+    object Logout : CashierEvent()
+}
 
 @HiltViewModel
 class CashierViewModel @Inject constructor(
@@ -20,13 +28,35 @@ class CashierViewModel @Inject constructor(
     private val socketRepository: SocketRepository
 ) : ViewModel() {
 
-    private val _orders = MutableStateFlow(createSampleOrders())
+    private val _orders = MutableStateFlow<List<Order>>(emptyList())
     val orders: StateFlow<List<Order>> = _orders.asStateFlow()
 
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
 
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _events = MutableSharedFlow<CashierEvent>()
+    val events: SharedFlow<CashierEvent> = _events.asSharedFlow()
+
     init {
+        loadOrders()
+        observeSocketEvents()
+        connectToServer()
+    }
+
+    private fun loadOrders() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            orderRepository.getOrders().collect { orderList ->
+                _orders.value = orderList
+                _isLoading.value = false
+            }
+        }
+    }
+
+    private fun observeSocketEvents() {
         viewModelScope.launch {
             socketRepository.isConnected.collect { connected ->
                 _isConnected.value = connected
@@ -38,20 +68,32 @@ class CashierViewModel @Inject constructor(
                 handleSocketEvent(event)
             }
         }
+    }
 
-        socketRepository.connect("http://192.168.1.8:3000")
+    private fun connectToServer() {
+        socketRepository.connect(NetworkConfig.BASE_URL)
         socketRepository.registerUser(com.nexus.restaurant.domain.model.UserRole.CASHIER, "cashier_1")
     }
 
-    private fun handleSocketEvent(event: com.nexus.restaurant.domain.model.SocketEvent) {
+    private fun handleSocketEvent(event: SocketEvent) {
         when (event) {
-            is com.nexus.restaurant.domain.model.SocketEvent.NewOrder -> {
+            is SocketEvent.NewOrder -> {
                 val currentOrders = _orders.value.toMutableList()
                 currentOrders.add(0, event.order)
                 _orders.value = currentOrders
             }
-            is com.nexus.restaurant.domain.model.SocketEvent.OrderStatusUpdated -> {
+            is SocketEvent.OrderStatusUpdated -> {
                 updateOrderInList(event.order)
+            }
+            is SocketEvent.SyncData -> {
+                if (event.orders.isNotEmpty()) {
+                    _orders.value = event.orders
+                }
+            }
+            is SocketEvent.Error -> {
+                viewModelScope.launch {
+                    _events.emit(CashierEvent.ShowError(event.message))
+                }
             }
             else -> {}
         }
@@ -66,76 +108,24 @@ class CashierViewModel @Inject constructor(
         }
     }
 
-    private fun createSampleOrders(): List<Order> {
-        return listOf(
-            Order(
-                orderId = "ORD-001",
-                tableNo = "2",
-                people = 4,
-                items = listOf(
-                    OrderItem("1", "Burger", 12.99, 2),
-                    OrderItem("7", "Cola", 2.99, 2),
-                    OrderItem("9", "Cake", 7.99, 1)
-                ),
-                status = OrderStatus.SERVED,
-                notes = "",
-                timestamp = System.currentTimeMillis() - 45 * 60 * 1000,
-                totalAmount = 43.95
-            ),
-            Order(
-                orderId = "ORD-002",
-                tableNo = "5",
-                people = 2,
-                items = listOf(
-                    OrderItem("2", "Pizza", 14.99, 1),
-                    OrderItem("8", "Coffee", 3.99, 2)
-                ),
-                status = OrderStatus.READY,
-                notes = "",
-                timestamp = System.currentTimeMillis() - 15 * 60 * 1000,
-                totalAmount = 22.97
-            ),
-            Order(
-                orderId = "ORD-003",
-                tableNo = "8",
-                people = 6,
-                items = listOf(
-                    OrderItem("3", "Pasta", 11.99, 3),
-                    OrderItem("5", "Soup", 6.99, 2),
-                    OrderItem("10", "Ice Cream", 5.99, 3)
-                ),
-                status = OrderStatus.PREPARING,
-                notes = "",
-                timestamp = System.currentTimeMillis() - 20 * 60 * 1000,
-                totalAmount = 68.91
-            ),
-            Order(
-                orderId = "ORD-004",
-                tableNo = "1",
-                people = 4,
-                items = listOf(
-                    OrderItem("1", "Burger", 12.99, 4),
-                    OrderItem("6", "Fries", 4.99, 4)
-                ),
-                status = OrderStatus.PENDING,
-                notes = "",
-                timestamp = System.currentTimeMillis() - 5 * 60 * 1000,
-                totalAmount = 71.92
-            ),
-            Order(
-                orderId = "ORD-005",
-                tableNo = "3",
-                people = 2,
-                items = listOf(
-                    OrderItem("2", "Pizza", 14.99, 1),
-                    OrderItem("9", "Cake", 7.99, 1)
-                ),
-                status = OrderStatus.SERVED,
-                notes = "",
-                timestamp = System.currentTimeMillis() - 90 * 60 * 1000,
-                totalAmount = 22.98
-            )
-        )
+    fun refresh() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                socketRepository.requestSync()
+            } catch (e: Exception) {
+                _events.emit(CashierEvent.ShowError("Refresh failed: ${e.message}"))
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    fun logout() {
+        socketRepository.disconnect()
+        viewModelScope.launch {
+            _events.emit(CashierEvent.Logout)
+        }
     }
 
     override fun onCleared() {

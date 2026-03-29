@@ -43,15 +43,33 @@ fun NexusNavHost(
         }
 
         composable(Screen.Waiter.route) {
-            WaiterScreen()
+            WaiterScreen(
+                onLogout = {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
         }
 
         composable(Screen.Kitchen.route) {
-            KitchenScreen()
+            KitchenScreen(
+                onLogout = {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
         }
 
         composable(Screen.Cashier.route) {
-            CashierScreen()
+            CashierScreen(
+                onLogout = {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
         }
     }
 }

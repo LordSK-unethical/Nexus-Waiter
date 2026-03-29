@@ -1,8 +1,10 @@
 package com.nexus.restaurant.di
 
+import com.nexus.restaurant.data.repository.MenuRepositoryImpl
 import com.nexus.restaurant.data.repository.OrderRepositoryImpl
 import com.nexus.restaurant.data.repository.SocketRepositoryImpl
 import com.nexus.restaurant.data.repository.TableRepositoryImpl
+import com.nexus.restaurant.domain.repository.MenuRepository
 import com.nexus.restaurant.domain.repository.OrderRepository
 import com.nexus.restaurant.domain.repository.SocketRepository
 import com.nexus.restaurant.domain.repository.TableRepository
@@ -15,6 +17,12 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
+
+    @Binds
+    @Singleton
+    abstract fun bindMenuRepository(
+        menuRepositoryImpl: MenuRepositoryImpl
+    ): MenuRepository
 
     @Binds
     @Singleton

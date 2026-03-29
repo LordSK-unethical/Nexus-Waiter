@@ -13,6 +13,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,13 +26,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -39,13 +44,15 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -57,10 +64,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,12 +80,12 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.nexus.restaurant.domain.model.MenuItem
 import com.nexus.restaurant.domain.model.Order
-import com.nexus.restaurant.domain.model.OrderItem
 import com.nexus.restaurant.domain.model.OrderStatus
 import com.nexus.restaurant.domain.model.Table
 import com.nexus.restaurant.domain.model.TableStatus
 import com.nexus.restaurant.presentation.common.GlassSurfaceCard
 import com.nexus.restaurant.presentation.common.GradientBackground
+import com.nexus.restaurant.presentation.common.LoadingIndicator
 import com.nexus.restaurant.presentation.common.StatusIndicator
 import com.nexus.restaurant.presentation.theme.AvailableGreen
 import com.nexus.restaurant.presentation.theme.AvailableGreenLight
@@ -94,29 +99,49 @@ import com.nexus.restaurant.presentation.theme.ReadyColor
 import com.nexus.restaurant.presentation.theme.ReservedRed
 import com.nexus.restaurant.presentation.theme.ReservedRedLight
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.text.NumberFormat
 import java.util.Locale
-import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WaiterScreen(
-    viewModel: WaiterViewModel = hiltViewModel()
+    viewModel: WaiterViewModel = hiltViewModel(),
+    onLogout: () -> Unit = {}
 ) {
     val tables by viewModel.tables.collectAsState()
     val orders by viewModel.orders.collectAsState()
+    val menuItems by viewModel.menuItems.collectAsState()
     val isConnected by viewModel.isConnected.collectAsState()
-    val cartItems by viewModel.cartItems.collectAsState()
+    val cartItemCount by viewModel.cartItems.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
 
     var selectedTable by remember { mutableStateOf<Table?>(null) }
     var showOrderSheet by remember { mutableStateOf(false) }
     var showCartSheet by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // Handle events
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is WaiterEvent.ShowError -> {
+                    snackbarHostState.showSnackbar(event.message)
+                }
+                is WaiterEvent.ShowSuccess -> {
+                    snackbarHostState.showSnackbar(event.message)
+                }
+                is WaiterEvent.OrderPlaced -> {
+                    showOrderSheet = false
+                    showCartSheet = false
+                }
+                is WaiterEvent.Logout -> {
+                    onLogout()
+                }
+            }
+        }
+    }
 
     GradientBackground {
         Scaffold(
@@ -138,9 +163,26 @@ fun WaiterScreen(
                         }
                     },
                     actions = {
+                        // Refresh button
+                        IconButton(onClick = { viewModel.refresh() }) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Refresh",
+                                tint = Primary
+                            )
+                        }
+                        // Logout button
+                        IconButton(onClick = { viewModel.logout() }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Logout,
+                                contentDescription = "Logout",
+                                tint = ReservedRed
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(end = 16.dp)
+                            modifier = Modifier.padding(end = 8.dp)
                         ) {
                             StatusIndicator(isConnected = isConnected)
                             Spacer(modifier = Modifier.width(8.dp))
@@ -157,14 +199,14 @@ fun WaiterScreen(
                 )
             },
             floatingActionButton = {
-                if (cartItems.isNotEmpty()) {
+                if (cartItemCount.isNotEmpty()) {
                     BadgedBox(
                         badge = {
                             Badge(
                                 containerColor = ReservedRed,
                                 contentColor = Color.White
                             ) {
-                                Text(cartItems.values.sumOf { it }.toString())
+                                Text(cartItemCount.values.sumOf { it }.toString())
                             }
                         }
                     ) {
@@ -183,48 +225,59 @@ fun WaiterScreen(
             },
             containerColor = Color.Transparent
         ) { paddingValues ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            ) {
-                // Active Orders Summary
-                ActiveOrdersBar(orders = orders)
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Tables Grid
-                Text(
-                    text = "Tables",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxSize()
+            if (isLoading && menuItems.isEmpty()) {
+                LoadingIndicator()
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
                 ) {
-                    items(tables) { table ->
-                        TableCard(
-                            table = table,
-                            onClick = {
-                                selectedTable = table
-                                showOrderSheet = true
-                            }
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        ActiveOrdersBar(orders = orders)
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text(
+                            text = "Tables",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 16.dp)
                         )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (tables.isEmpty()) {
+                            EmptyState(
+                                message = "No tables available",
+                                modifier = Modifier.weight(1f)
+                            )
+                        } else {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(2),
+                                contentPadding = PaddingValues(16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(tables) { table ->
+                                    TableCard(
+                                        table = table,
+                                        onClick = {
+                                            selectedTable = table
+                                            showOrderSheet = true
+                                        }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
 
         // Order Bottom Sheet
-        if (showOrderSheet && selectedTable != null) {
+        if (showOrderSheet && selectedTable != null && menuItems.isNotEmpty()) {
             ModalBottomSheet(
                 onDismissRequest = { showOrderSheet = false },
                 sheetState = sheetState,
@@ -233,21 +286,15 @@ fun WaiterScreen(
             ) {
                 OrderCreationSheet(
                     table = selectedTable!!,
-                    menuItems = viewModel.getSampleMenuItems(),
-                    cartItems = cartItems,
-                    onAddToCart = { item, quantity ->
-                        viewModel.addToCart(item, quantity)
-                        scope.launch {
-                            snackbarHostState.showSnackbar("Added ${item.name} x$quantity")
-                        }
+                    menuItems = menuItems,
+                    cartItems = cartItemCount,
+                    getCartQuantity = { itemId -> viewModel.getCartItemQuantity(itemId) },
+                    onQuantityChange = { itemId, qty -> viewModel.updateCartQuantity(itemId, qty) },
+                    onPlaceOrder = { notes ->
+                        viewModel.createOrder(selectedTable!!, notes)
                     },
-                    onPlaceOrder = {
-                        viewModel.createOrder(selectedTable!!)
-                        showOrderSheet = false
-                        scope.launch {
-                            snackbarHostState.showSnackbar("Order placed successfully!")
-                        }
-                    }
+                    cartTotal = viewModel.getCartTotal(),
+                    cartItemCount = viewModel.getCartItemCount()
                 )
             }
         }
@@ -261,19 +308,45 @@ fun WaiterScreen(
                 shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
             ) {
                 CartSummary(
-                    items = cartItems,
+                    items = viewModel.getCartItemsWithDetails(),
                     tableNumber = selectedTable?.tableNo ?: "",
-                    onRemoveItem = { viewModel.removeFromCart(it) },
+                    total = viewModel.getCartTotal(),
+                    getCartQuantity = { itemId -> viewModel.getCartItemQuantity(itemId) },
+                    onQuantityChange = { itemId, qty -> viewModel.updateCartQuantity(itemId, qty) },
                     onClearCart = { viewModel.clearCart() },
                     onCheckout = {
                         selectedTable?.let { viewModel.createOrder(it) }
-                        showCartSheet = false
-                        scope.launch {
-                            snackbarHostState.showSnackbar("Order placed!")
-                        }
                     }
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun EmptyState(
+    message: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Default.Restaurant,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = Color.Gray.copy(alpha = 0.5f)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.Gray
+            )
         }
     }
 }
@@ -439,7 +512,7 @@ private fun TableCard(
             if (table.status == TableStatus.RESERVED && table.reservationName != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = table.reservationName!!,
+                    text = table.reservationName,
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Medium,
                     color = ReservedRed
@@ -453,12 +526,16 @@ private fun TableCard(
 private fun OrderCreationSheet(
     table: Table,
     menuItems: List<MenuItem>,
-    cartItems: Map<MenuItem, Int>,
-    onAddToCart: (MenuItem, Int) -> Unit,
-    onPlaceOrder: () -> Unit
+    cartItems: Map<String, Int>,
+    getCartQuantity: (String) -> Int,
+    onQuantityChange: (String, Int) -> Unit,
+    onPlaceOrder: (String) -> Unit,
+    cartTotal: Double,
+    cartItemCount: Int
 ) {
     val categories = menuItems.groupBy { it.category }
     var selectedCategory by remember { mutableStateOf(categories.keys.first()) }
+    var orderNotes by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -473,9 +550,11 @@ private fun OrderCreationSheet(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Category tabs
+        // Category tabs with horizontal scroll
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             categories.keys.forEach { category ->
@@ -494,16 +573,29 @@ private fun OrderCreationSheet(
             columns = GridCells.Fixed(2),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.height(300.dp)
+            modifier = Modifier.height(280.dp)
         ) {
             items(categories[selectedCategory] ?: emptyList()) { item ->
                 MenuItemCard(
                     item = item,
-                    quantity = cartItems[item] ?: 0,
-                    onAdd = { onAddToCart(item, 1) }
+                    quantity = getCartQuantity(item.id),
+                    onQuantityChange = { newQty -> onQuantityChange(item.id, newQty) }
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Order notes
+        OutlinedTextField(
+            value = orderNotes,
+            onValueChange = { orderNotes = it },
+            label = { Text("Order Notes (optional)") },
+            placeholder = { Text("Special instructions...") },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            maxLines = 2
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -514,12 +606,12 @@ private fun OrderCreationSheet(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
                     .background(Primary)
-                    .clickable(onClick = onPlaceOrder)
+                    .clickable { onPlaceOrder(orderNotes) }
                     .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Place Order (${cartItems.values.sumOf { it }} items)",
+                    text = "Place Order ($cartItemCount items) - ${formatCurrency(cartTotal)}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -557,10 +649,8 @@ private fun CategoryChip(
 private fun MenuItemCard(
     item: MenuItem,
     quantity: Int,
-    onAdd: () -> Unit
+    onQuantityChange: (Int) -> Unit
 ) {
-    var itemQuantity by remember { mutableIntStateOf(0) }
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -600,7 +690,7 @@ private fun MenuItemCard(
             )
 
             Text(
-                text = "$${String.format("%.2f", item.price)}",
+                text = formatCurrency(item.price),
                 style = MaterialTheme.typography.bodySmall,
                 color = Primary,
                 fontWeight = FontWeight.Bold
@@ -608,8 +698,9 @@ private fun MenuItemCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            // Controlled quantity display
             AnimatedContent(
-                targetState = itemQuantity,
+                targetState = quantity,
                 transitionSpec = {
                     (fadeIn() + scaleIn()) togetherWith (fadeOut() + scaleOut())
                 },
@@ -621,7 +712,7 @@ private fun MenuItemCard(
                         horizontalArrangement = Arrangement.Center
                     ) {
                         IconButton(
-                            onClick = { if (itemQuantity > 0) itemQuantity-- },
+                            onClick = { onQuantityChange(qty - 1) },
                             modifier = Modifier.size(28.dp)
                         ) {
                             Icon(
@@ -639,7 +730,7 @@ private fun MenuItemCard(
                         )
 
                         IconButton(
-                            onClick = { itemQuantity++ },
+                            onClick = { onQuantityChange(qty + 1) },
                             modifier = Modifier.size(28.dp)
                         ) {
                             Icon(
@@ -654,7 +745,7 @@ private fun MenuItemCard(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .background(Primary)
-                            .clickable { itemQuantity = 1 }
+                            .clickable { onQuantityChange(1) }
                             .padding(horizontal = 16.dp, vertical = 6.dp)
                     ) {
                         Text(
@@ -673,9 +764,11 @@ private fun MenuItemCard(
 @Composable
 private fun CartSummary(
     items: Map<MenuItem, Int>,
-    tableNumber: String,
-    onRemoveItem: (MenuItem) -> Unit,
-    onClearCart: () -> Unit,
+    @Suppress("UNUSED_PARAMETER") tableNumber: String,
+    total: Double,
+    getCartQuantity: (String) -> Int,
+    onQuantityChange: (String, Int) -> Unit,
+    @Suppress("UNUSED_PARAMETER") onClearCart: () -> Unit,
     onCheckout: () -> Unit
 ) {
     Column(
@@ -690,8 +783,6 @@ private fun CartSummary(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-
-        val total = items.entries.sumOf { (item, qty) -> item.price * qty }
 
         items.forEach { (item, qty) ->
             Row(
@@ -708,13 +799,44 @@ private fun CartSummary(
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = "$qty x $${String.format("%.2f", item.price)}",
+                        text = "$qty x ${formatCurrency(item.price)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.Gray
                     )
                 }
+                
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { onQuantityChange(item.id, getCartQuantity(item.id) - 1) },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Remove,
+                            contentDescription = "Decrease",
+                            tint = ReservedRed,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Text(
+                        text = getCartQuantity(item.id).toString(),
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(
+                        onClick = { onQuantityChange(item.id, getCartQuantity(item.id) + 1) },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Increase",
+                            tint = Primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+                
                 Text(
-                    text = "$${String.format("%.2f", item.price * qty)}",
+                    text = formatCurrency(item.price * qty),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -723,7 +845,7 @@ private fun CartSummary(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Divider()
+        HorizontalDivider()
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -737,7 +859,7 @@ private fun CartSummary(
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "$${String.format("%.2f", total)}",
+                text = formatCurrency(total),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = Primary
@@ -784,4 +906,8 @@ private fun getDurationString(timestamp: Long): String {
         hours > 0 -> "${hours}h ${minutes % 60}m"
         else -> "${minutes}m"
     }
+}
+
+private fun formatCurrency(amount: Double): String {
+    return NumberFormat.getCurrencyInstance(Locale.US).format(amount)
 }
